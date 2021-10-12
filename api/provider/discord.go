@@ -37,7 +37,6 @@ func NewDiscordProvider(ext conf.OAuthProviderConfiguration, scopes string) (OAu
 	apiPath := chooseHost(ext.URL, defaultDiscordAPIBase) + "/api"
 
 	oauthScopes := []string{
-		"email",
 		"identify",
 	}
 
@@ -70,10 +69,6 @@ func (g discordProvider) GetUserData(ctx context.Context, tok *oauth2.Token) (*U
 		return nil, err
 	}
 
-	if u.Email == "" {
-		return nil, errors.New("Unable to find email with Discord provider")
-	}
-
 	var avatarURL string
 	extension := "png"
 	// https://discord.com/developers/docs/reference#image-formatting-cdn-endpoints:
@@ -97,7 +92,7 @@ func (g discordProvider) GetUserData(ctx context.Context, tok *oauth2.Token) (*U
 			Subject:       u.ID,
 			Name:          u.Name,
 			Picture:       avatarURL,
-			Email:         u.Email,
+			Email:         fmt.Sprintf("%s@oauth.discord.com", u.ID),
 			EmailVerified: u.Verified,
 
 			// To be deprecated
@@ -106,7 +101,7 @@ func (g discordProvider) GetUserData(ctx context.Context, tok *oauth2.Token) (*U
 			ProviderId: u.ID,
 		},
 		Emails: []Email{{
-			Email:    u.Email,
+			Email:    fmt.Sprintf("%s@oauth.discord.com", u.ID),
 			Verified: u.Verified,
 			Primary:  true,
 		}},
