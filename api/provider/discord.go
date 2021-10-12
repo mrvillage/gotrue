@@ -84,14 +84,14 @@ func (g discordProvider) GetUserData(ctx context.Context, tok *oauth2.Token) (*U
 		}
 		avatarURL = fmt.Sprintf("https://cdn.discordapp.com/avatars/%s/%s.%s", u.ID, u.Avatar, extension)
 	}
-
+// fmt.Sprintf("%s@oauth.discord.com", u.ID)
 	return &UserProvidedData{
 		Metadata: &Claims{
 			Issuer:        g.APIPath,
 			Subject:       u.ID,
 			Name:          u.Name,
 			Picture:       avatarURL,
-			Email:         fmt.Sprintf("%s@oauth.discord.com", u.ID),
+			Email:         u.Email,
 			EmailVerified: u.Verified,
 
 			// To be deprecated
@@ -100,7 +100,7 @@ func (g discordProvider) GetUserData(ctx context.Context, tok *oauth2.Token) (*U
 			ProviderId: u.ID,
 		},
 		Emails: []Email{{
-			Email:    fmt.Sprintf("%s@oauth.discord.com", u.ID),
+			Email:    u.Email,
 			Verified: u.Verified,
 			Primary:  true,
 		}},
