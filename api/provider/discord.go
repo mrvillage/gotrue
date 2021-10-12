@@ -36,7 +36,6 @@ func NewDiscordProvider(ext conf.OAuthProviderConfiguration, scopes string) (OAu
 	apiPath := chooseHost(ext.URL, defaultDiscordAPIBase) + "/api"
 
 	oauthScopes := []string{
-		"email",
 		"identify",
 	}
 
@@ -85,14 +84,15 @@ func (g discordProvider) GetUserData(ctx context.Context, tok *oauth2.Token) (*U
 		}
 		avatarURL = fmt.Sprintf("https://cdn.discordapp.com/avatars/%s/%s.%s", u.ID, u.Avatar, extension)
 	}
-// fmt.Sprintf("%s@oauth.discord.com", u.ID)
+	var email string
+	email = fmt.Sprintf("%s@oauth.discord.com", u.ID)
 	return &UserProvidedData{
 		Metadata: &Claims{
 			Issuer:        g.APIPath,
 			Subject:       u.ID,
 			Name:          u.Name,
 			Picture:       avatarURL,
-			Email:         u.Email,
+			Email:         email,
 			EmailVerified: u.Verified,
 
 			// To be deprecated
@@ -101,7 +101,7 @@ func (g discordProvider) GetUserData(ctx context.Context, tok *oauth2.Token) (*U
 			ProviderId: u.ID,
 		},
 		Emails: []Email{{
-			Email:    u.Email,
+			Email:    email,
 			Verified: u.Verified,
 			Primary:  true,
 		}},
