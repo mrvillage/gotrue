@@ -93,7 +93,7 @@ func (g discordProvider) GetUserData(ctx context.Context, tok *oauth2.Token) (*U
 			Name:          u.Name,
 			Picture:       avatarURL,
 			Email:         email,
-			EmailVerified: u.Verified,
+			EmailVerified: true,
 
 			// To be deprecated
 			AvatarURL:  avatarURL,
@@ -102,7 +102,7 @@ func (g discordProvider) GetUserData(ctx context.Context, tok *oauth2.Token) (*U
 		},
 		Emails: []Email{{
 			Email:    email,
-			Verified: u.Verified,
+			Verified: true,
 			Primary:  true,
 		}},
 	}, nil
