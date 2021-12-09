@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi"
@@ -17,7 +17,7 @@ type adminUserParams struct {
 	Role         string                 `json:"role"`
 	Email        string                 `json:"email"`
 	Phone        string                 `json:"phone"`
-	Password     string                 `json:"password"`
+	Password     *string                `json:"password"`
 	EmailConfirm bool                   `json:"email_confirm"`
 	PhoneConfirm bool                   `json:"phone_confirm"`
 	UserMetaData map[string]interface{} `json:"user_metadata"`
@@ -121,12 +121,12 @@ func (a *API) adminUserUpdate(w http.ResponseWriter, r *http.Request) error {
 			}
 		}
 
-		if params.Password != "" {
-			if len(params.Password) < config.PasswordMinLength {
-				return fmt.Errorf("Password should be at least %d characters", config.PasswordMinLength)
+		if params.Password != nil {
+			if len(*params.Password) < config.PasswordMinLength {
+				return invalidPasswordLengthError(config)
 			}
 
-			if terr := user.UpdatePassword(tx, params.Password); terr != nil {
+			if terr := user.UpdatePassword(tx, *params.Password); terr != nil {
 				return terr
 			}
 		}
@@ -166,6 +166,9 @@ func (a *API) adminUserUpdate(w http.ResponseWriter, r *http.Request) error {
 	})
 
 	if err != nil {
+		if errors.Is(err, invalidPasswordLengthError(config)) {
+			return err
+		}
 		return internalServerError("Error updating user").WithInternalError(err)
 	}
 
@@ -176,10 +179,6 @@ func (a *API) adminUserUpdate(w http.ResponseWriter, r *http.Request) error {
 func (a *API) adminUserCreate(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	config := a.getConfig(ctx)
-
-	if config.DisableSignup {
-		return forbiddenError("Signups not allowed for this instance")
-	}
 
 	instanceID := getInstanceID(ctx)
 	adminUser := getAdminUser(ctx)
@@ -198,9 +197,6 @@ func (a *API) adminUserCreate(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if params.Email != "" {
-		if !config.External.Email.Enabled {
-			return badRequestError("Email signups are disabled")
-		}
 		if err := a.validateEmail(ctx, params.Email); err != nil {
 			return err
 		}
@@ -212,9 +208,6 @@ func (a *API) adminUserCreate(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if params.Phone != "" {
-		if !config.External.Phone.Enabled {
-			return badRequestError("Phone signups are disabled")
-		}
 		params.Phone = a.formatPhoneNumber(params.Phone)
 		if isValid := a.validateE164Format(params.Phone); !isValid {
 			return unprocessableEntityError("Invalid phone format")
@@ -226,7 +219,7 @@ func (a *API) adminUserCreate(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 
-	user, err := models.NewUser(instanceID, params.Email, params.Password, aud, params.UserMetaData)
+	user, err := models.NewUser(instanceID, params.Email, *params.Password, aud, params.UserMetaData)
 	if err != nil {
 		return internalServerError("Error creating user").WithInternalError(err)
 	}
@@ -236,7 +229,8 @@ func (a *API) adminUserCreate(w http.ResponseWriter, r *http.Request) error {
 	if user.AppMetaData == nil {
 		user.AppMetaData = make(map[string]interface{})
 	}
-	user.AppMetaData["provider"] = []string{"email"}
+	user.AppMetaData["provider"] = "email"
+	user.AppMetaData["providers"] = []string{"email"}
 
 	err = a.db.Transaction(func(tx *storage.Connection) error {
 		if terr := models.NewAuditLogEntry(tx, instanceID, adminUser, models.UserSignedUpAction, map[string]interface{}{

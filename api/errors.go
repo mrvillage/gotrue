@@ -6,11 +6,15 @@ import (
 	"net/http"
 	"os"
 	"runtime/debug"
+
+	"github.com/netlify/gotrue/conf"
+	"github.com/pkg/errors"
 )
 
 // Common error messages during signup flow
 var (
-	DuplicateEmailMsg = "A user with this email address has already been registered"
+	DuplicateEmailMsg       = "A user with this email address has already been registered"
+	UserExistsError   error = errors.New("User already exists")
 )
 
 var oauthErrorMap = map[int]string{
@@ -54,6 +58,25 @@ func (e *OAuthError) Cause() error {
 		return e.InternalError
 	}
 	return e
+}
+
+func invalidPasswordLengthError(config *conf.Configuration) *HTTPError {
+	return unprocessableEntityError(fmt.Sprintf("Password should be at least %d characters", config.PasswordMinLength))
+}
+
+func invalidSignupError(config *conf.Configuration) *HTTPError {
+	var msg string
+	if config.External.Email.Enabled && config.External.Phone.Enabled {
+		msg = "To signup, please provide your email or phone number"
+	} else if config.External.Email.Enabled {
+		msg = "To signup, please provide your email"
+	} else if config.External.Phone.Enabled {
+		msg = "To signup, please provide your phone number"
+	} else {
+		// 3rd party OAuth signups
+		msg = "To signup, please provide required fields"
+	}
+	return unprocessableEntityError(msg)
 }
 
 func oauthError(err string, description string) *OAuthError {
@@ -110,6 +133,10 @@ func (e *HTTPError) Error() string {
 		return e.InternalMessage
 	}
 	return fmt.Sprintf("%d: %s", e.Code, e.Message)
+}
+
+func (e *HTTPError) Is(target error) bool {
+	return e.Error() == target.Error()
 }
 
 // Cause returns the root cause error

@@ -54,10 +54,7 @@ func (ts *AdminTestSuite) makeSuperAdmin(email string) string {
 
 	u.Role = "supabase_admin"
 
-	identities, err := models.FindIdentitiesByUser(ts.API.db, u)
-	require.NoError(ts.T(), err, "Error retrieving identities")
-
-	token, err := generateAccessToken(u, identities, time.Second*time.Duration(ts.Config.JWT.Exp), ts.Config.JWT.Secret)
+	token, err := generateAccessToken(u, time.Second*time.Duration(ts.Config.JWT.Exp), ts.Config.JWT.Secret)
 	require.NoError(ts.T(), err, "Error generating access token")
 
 	p := jwt.Parser{ValidMethods: []string{jwt.SigningMethodHS256.Name}}
@@ -73,10 +70,7 @@ func (ts *AdminTestSuite) makeSystemUser() string {
 	u := models.NewSystemUser(uuid.Nil, ts.Config.JWT.Aud)
 	u.Role = "service_role"
 
-	identities, err := models.FindIdentitiesByUser(ts.API.db, u)
-	require.NoError(ts.T(), err, "Error retrieving identities")
-
-	token, err := generateAccessToken(u, identities, time.Second*time.Duration(ts.Config.JWT.Exp), ts.Config.JWT.Secret)
+	token, err := generateAccessToken(u, time.Second*time.Duration(ts.Config.JWT.Exp), ts.Config.JWT.Secret)
 	require.NoError(ts.T(), err, "Error generating access token")
 
 	p := jwt.Parser{ValidMethods: []string{jwt.SigningMethodHS256.Name}}
@@ -285,7 +279,8 @@ func (ts *AdminTestSuite) TestAdminUserCreate() {
 	require.NoError(ts.T(), json.NewDecoder(w.Body).Decode(&data))
 	assert.Equal(ts.T(), "test1@example.com", data.GetEmail())
 	assert.Equal(ts.T(), "123456789", data.GetPhone())
-	assert.Equal(ts.T(), []interface{}{"email"}, data.AppMetaData["provider"])
+	assert.Equal(ts.T(), "email", data.AppMetaData["provider"])
+	assert.Equal(ts.T(), []interface{}{"email"}, data.AppMetaData["providers"])
 }
 
 // TestAdminUserGet tests API /admin/user route (GET)
@@ -399,6 +394,29 @@ func (ts *AdminTestSuite) TestAdminUserUpdateAsSystemUser() {
 	assert.Contains(ts.T(), u.AppMetaData["roles"], "editor")
 }
 
+func (ts *AdminTestSuite) TestAdminUserUpdatePasswordFailed() {
+	u, err := models.NewUser(ts.instanceID, "test1@example.com", "test", ts.Config.JWT.Aud, nil)
+	require.NoError(ts.T(), err, "Error making new user")
+	require.NoError(ts.T(), ts.API.db.Create(u), "Error creating user")
+
+	var updateEndpoint = fmt.Sprintf("/admin/users/%s", u.ID)
+	ts.Config.PasswordMinLength = 6
+	ts.Run("Password doesn't meet minimum length", func() {
+		var buffer bytes.Buffer
+		require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
+			"password": "",
+		}))
+
+		// Setup request
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPut, updateEndpoint, &buffer)
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ts.token))
+
+		ts.API.handler.ServeHTTP(w, req)
+		require.Equal(ts.T(), http.StatusUnprocessableEntity, w.Code)
+	})
+}
+
 // TestAdminUserDelete tests API /admin/user route (DELETE)
 func (ts *AdminTestSuite) TestAdminUserDelete() {
 	u, err := models.NewUser(ts.instanceID, "test-delete@example.com", "test", ts.Config.JWT.Aud, nil)
@@ -436,7 +454,7 @@ func (ts *AdminTestSuite) TestAdminUserCreateWithDisabledLogin() {
 				"email":    "test1@example.com",
 				"password": "test1",
 			},
-			http.StatusBadRequest,
+			http.StatusOK,
 		},
 		{
 			"Phone Signups Disabled",
@@ -452,7 +470,7 @@ func (ts *AdminTestSuite) TestAdminUserCreateWithDisabledLogin() {
 				"phone":    "123456789",
 				"password": "test1",
 			},
-			http.StatusBadRequest,
+			http.StatusOK,
 		},
 		{
 			"All Signups Disabled",
@@ -461,10 +479,10 @@ func (ts *AdminTestSuite) TestAdminUserCreateWithDisabledLogin() {
 				DisableSignup: true,
 			},
 			map[string]interface{}{
-				"email":    "test1@example.com",
-				"password": "test1",
+				"email":    "test2@example.com",
+				"password": "test2",
 			},
-			http.StatusForbidden,
+			http.StatusOK,
 		},
 	}
 
