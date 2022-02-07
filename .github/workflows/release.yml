@@ -72,11 +72,11 @@ jobs:
       - run: mv gotrue-arm64 gotrue
       - run: tar -czvf gotrue-${{ steps.releases.outputs.release }}-arm64.tar.gz gotrue migrations/
 
-      - uses: AButler/upload-release-assets@v2.0
-        with:
-          files: "gotrue-${{ steps.releases.outputs.release }}*.tar.gz"
-          release-tag: ${{ steps.releases.outputs.release }}
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      # - uses: AButler/upload-release-assets@v2.0
+      #   with:
+      #     files: "gotrue-${{ steps.releases.outputs.release }}*.tar.gz"
+      #     release-tag: ${{ steps.releases.outputs.release }}
+      #     repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: docker/setup-qemu-action@v1
         with:
