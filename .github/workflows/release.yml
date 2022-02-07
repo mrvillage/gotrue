@@ -49,7 +49,7 @@ jobs:
   deploy:
     needs: release
     runs-on: ubuntu-18.04
-    if: success() && needs.release.outputs.status == 'true'
+    if: success() # && needs.release.outputs.status == 'true'
     steps:
       - uses: actions/checkout@v2
 
@@ -98,4 +98,4 @@ jobs:
           push: true
           tags: |
             mrvillage/gotrue:latest
-            mrvillage/gotrue:${{ steps.releases.outputs.release }}
+          # mrvillage/gotrue:${{ steps.releases.outputs.release }}
