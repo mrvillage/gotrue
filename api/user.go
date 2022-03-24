@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/gofrs/uuid"
+	"github.com/netlify/gotrue/api/sms_provider"
 	"github.com/netlify/gotrue/models"
 	"github.com/netlify/gotrue/storage"
 )
@@ -119,13 +120,31 @@ func (a *API) UserUpdate(w http.ResponseWriter, r *http.Request) error {
 
 			mailer := a.Mailer(ctx)
 			referrer := a.getReferrer(r)
-			if config.Mailer.SecureEmailChangeEnabled {
-				if terr = a.sendSecureEmailChange(tx, user, mailer, params.Email, referrer); terr != nil {
-					return internalServerError("Error sending change email").WithInternalError(terr)
-				}
+			if terr = a.sendEmailChange(tx, config, user, mailer, params.Email, referrer); terr != nil {
+				return internalServerError("Error sending change email").WithInternalError(terr)
+			}
+		}
+
+		if params.Phone != "" {
+			params.Phone, err = a.validatePhone(params.Phone)
+			if err != nil {
+				return err
+			}
+			var exists bool
+			if exists, terr = models.IsDuplicatedPhone(tx, instanceID, params.Phone, user.Aud); terr != nil {
+				return internalServerError("Database error checking phone").WithInternalError(terr)
+			} else if exists {
+				return unprocessableEntityError(DuplicatePhoneMsg)
+			}
+			if config.Sms.Autoconfirm {
+				return user.UpdatePhone(tx, params.Phone)
 			} else {
-				if terr = a.sendEmailChange(tx, user, mailer, params.Email, referrer); terr != nil {
-					return internalServerError("Error sending change email").WithInternalError(terr)
+				smsProvider, terr := sms_provider.GetSmsProvider(*config)
+				if terr != nil {
+					return terr
+				}
+				if terr := a.sendPhoneConfirmation(ctx, tx, user, params.Phone, phoneChangeOtp, smsProvider); terr != nil {
+					return internalServerError("Error sending phone change otp").WithInternalError(terr)
 				}
 			}
 		}
